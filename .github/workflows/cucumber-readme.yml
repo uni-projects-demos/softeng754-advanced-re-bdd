@@ -1,0 +1,199 @@
+name: cucumber-readme
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  headless: true
+  TZ: UTC
+
+jobs:
+  readme:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run
+        id: acceptance
+        uses: ./.github/actions/acceptance
+        with:
+          repo_name: ${{ secrets.REPO_NAME }}
+          repo_token: ${{ secrets.REPO_TOKEN }}
+          is_publish: 'false'
+
+      - name: Summary
+        shell: bash
+        env:
+          TEST_EXIT: ${{ steps.acceptance.outputs.exit_code }}
+        run: |
+          python3 <<'PY'
+          from collections import Counter
+          from pathlib import Path
+          from json import loads
+          from os import environ
+          from re import sub
+          
+          SKIP_STATUSES: set[str] = {
+              "undefined",
+              "pending",
+              "ambiguous",
+              "skipped",
+          }
+          
+          scenario_results: list[dict[str, str | list[dict[str, str]]]] = []
+          report_path: Path = Path("project/target/cucumber.json")
+          
+          if report_path.exists():
+              features: dict = loads(s=report_path.read_text(errors="replace"))
+              for feature in features:
+                  feature_name: str = feature.get("name", "Unnamed feature")
+          
+                  for scenario in feature.get("elements", []):
+                      if scenario.get("type") == "background":
+                          continue
+          
+                      statuses: set[str] = {
+                          step.get("result", {}).get("status", "").lower()
+                          for section in (
+                              "before",
+                              "steps",
+                              "after",
+                          )
+                          for step in scenario.get(section, [])
+                      } - {""}
+          
+                      if "failed" in statuses:
+                          scenario_status: str = "FAIL"
+                      elif statuses & SKIP_STATUSES:
+                          scenario_status = "SKIP"
+                      else:
+                          scenario_status = "PASS"
+          
+                      scenario_steps: list[dict[str, str]] = [
+                          {
+                              "keyword": step.get("keyword", "").strip(),
+                              "text": step.get("name", ""),
+                          }
+                          for step in scenario.get("steps", [])
+                      ]
+          
+                      scenario_results.append(
+                          {
+                              "feature": feature_name,
+                              "scenario": scenario.get("name", "Unnamed scenario"),
+                              "status": scenario_status,
+                              "steps": scenario_steps,
+                          }
+                      )
+          
+          status_counts: Counter[str | list[dict[str, str]]] = Counter(
+              r["status"] for r in scenario_results
+          )
+          
+          num_passed: int = status_counts["PASS"]
+          num_failed: int = status_counts["FAIL"]
+          num_skipped: int = status_counts["SKIP"]
+          num_ttl: int = len(scenario_results)
+          
+          log_path: Path = Path("cucumber.log")
+          log: str = ""
+          if log_path.exists():
+              log = sub(
+                  pattern=r"\x1b\[[0-9;]*m",
+                  repl="",
+                  string=log_path.read_text(errors="replace"),
+              )
+          
+          status: str = "Success" if environ.get("TEST_EXIT") == "0" else "Fail"
+          
+          result_lines = []
+          current_feature = None
+          for res in scenario_results:
+              if res["feature"] != current_feature:
+                  current_feature = res["feature"]
+          
+                  if result_lines:
+                      result_lines.append("")
+          
+                  result_lines.extend(
+                      [
+                          f"Feature: {current_feature}",
+                          "-" * len(current_feature),
+                          "",
+                      ]
+                  )
+          
+              result_lines.append(f"Scenario: [{res['status']}] {res['scenario']}\n")
+          
+              for step in res["steps"]:
+                  result_lines.append(f"  {step['keyword']} " f"{step['text']}")
+          
+              result_lines.append("")
+          
+          results_block: str = "\n".join(result_lines)
+          
+          readme_content: str = f"""
+          # Advanced Requirements Engineering BDD Demo
+          
+          RE BDD acceptance-test scenario results for seamless E-commerce art gallery web app using Spring Boot.
+
+          Cucumber test results are generated from a workflow run on an advanced University of Auckland project.
+
+          Advanced Requirements Engineering project, Group 1 members:
+          * Fuki Babasaki
+          * James Coppard
+          * Adam Ross
+          * Beverley Sun 
+          * Valerio Terragni
+
+          > Note: course/project is completed before ChatGPT and other Gen-AI models have been publicly available.
+
+          ## Test Results
+          
+          | Scenario Status | Count |
+          |---|---:|
+          | Passed | {num_passed} |
+          | Failed | {num_failed} |
+          | Skipped | {num_skipped} |
+          
+          ```gherkin
+          {results_block}
+          ```
+          """
+          
+          readme_path: Path = Path("README.md")
+          readme_path.write_text(data=readme_content)
+          PY
+
+      - name: Commit
+        shell: bash
+        run: |
+          git config user.name "Adam Ross [workflow]"
+          git config user.email "14985050+r055a@users.noreply.github.com"
+
+          git add README.md
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Add README.md"
+            git push
+          fi
+
+      - name: Status
+        if: always()
+        shell: bash
+        env:
+          TEST_EXIT: ${{ steps.acceptance.outputs.exit_code }}
+        run: |
+          if [ "$TEST_EXIT" != "0" ]; then
+            echo "Fail"
+            exit "$TEST_EXIT"
+          fi
+
+          echo "Pass"

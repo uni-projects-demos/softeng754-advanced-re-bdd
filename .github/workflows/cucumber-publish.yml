@@ -1,0 +1,54 @@
+name: cucumber-publish
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  headless: true
+  TZ: UTC
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run
+        id: acceptance
+        uses: ./.github/actions/acceptance
+        with:
+          repo_name: ${{ secrets.REPO_NAME }}
+          repo_token: ${{ secrets.REPO_TOKEN }}
+          is_publish: 'true'
+
+      - name: Report
+        if: always()
+        shell: bash
+        run: |
+          REPORT_URL="$(grep -Eo 'https://reports\.cucumber\.io/reports/[^[:space:]]+' cucumber.log 2>/dev/null | tail -1 || true)"
+
+          if [ -n "$REPORT_URL" ]; then
+            echo "## Cucumber Report" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "$REPORT_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "No Cucumber report URL found in test output." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Status
+        if: always()
+        shell: bash
+        env:
+          TEST_EXIT: ${{ steps.acceptance.outputs.exit_code }}
+        run: |
+          if [ "$TEST_EXIT" != "0" ]; then
+            echo "Fail"
+            exit "$TEST_EXIT"
+          fi
+
+          echo "Pass"
