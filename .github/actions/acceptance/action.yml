@@ -650,7 +650,7 @@ runs:
       working-directory: project
       shell: bash
       env:
-        IS_PUBLISH: ${{ inputs.is_publish }}
+        CUCUMBER_PUBLISH_ENABLED: ${{ inputs.is_publish }}
       run: |
         set +e
         ./gradlew test cucumber --no-daemon 2>&1 | tee ../cucumber.log
