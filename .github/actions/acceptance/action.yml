@@ -55,11 +55,16 @@ runs:
             "version: '4.1.4'",
             "version: '4.18.1'"
         )
+        plugins: list[str] = []
         if "'--plugin', 'json:target/cucumber.json'" not in text:
+            plugins.append("        '--plugin', 'json:target/cucumber.json',")
+        if "'--plugin', 'html:target/cucumber-html/index.html'" not in text:
+            plugins.append("        '--plugin', 'html:target/cucumber-html/index.html',")
+
+        if plugins:
             text = text.replace(
                 "args = ['--plugin', 'pretty',",
-                "args = ['--plugin', 'pretty',\n"
-                "        '--plugin', 'json:target/cucumber.json',",
+                "args = ['--plugin', 'pretty',\n" + "\n".join(plugins),
             )
 
         marker: str = "version '1.0-SNAPSHOT'"

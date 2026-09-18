@@ -30,7 +30,7 @@ jobs:
         if: always()
         shell: bash
         run: |
-          REPORT_URL="$(grep -Eo 'https://reports\.cucumber\.io/reports/[^[:space:]]+' cucumber.log 2>/dev/null | tail -1 || true)"
+          REPORT_URL="$(grep -Eo 'https://reports\.cucumber\.io/reports/[0-9a-fA-F-]+' cucumber.log 2>/dev/null | tail -1 || true)"
 
           if [ -n "$REPORT_URL" ]; then
             echo "## Cucumber Report" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,430 @@
+name: cucumber-deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+env:
+  headless: true
+  TZ: UTC
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      test_exit: ${{ steps.acceptance.outputs.exit_code }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Run
+        id: acceptance
+        uses: ./.github/actions/acceptance
+        with:
+          repo_name: ${{ secrets.REPO_NAME }}
+          repo_token: ${{ secrets.REPO_TOKEN }}
+          is_publish: 'false'
+
+      - name: Prepare
+        if: always()
+        shell: bash
+        run: |
+          set -e
+          mkdir -p _site/cucumber _site/pretty
+
+          if [ -d "project/target/cucumber-html" ]; then
+            cp -R project/target/cucumber-html/. _site/cucumber/
+          else
+            cat > _site/cucumber/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>Cucumber HTML Report</title>
+          </head>
+          <body>
+            <h1>Cucumber HTML Report</h1>
+            <p>The Cucumber HTML report was not generated for this run.</p>
+          </body>
+          </html>
+          EOF
+          fi
+
+          if [ -d "project/target/cucumber-report" ]; then
+            cp -R project/target/cucumber-report/. _site/pretty/
+          else
+            cat > _site/pretty/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <title>PrettyReports Dashboard</title>
+          </head>
+          <body>
+            <h1>PrettyReports Dashboard</h1>
+            <p>The PrettyReports dashboard was not generated for this run.</p>
+          </body>
+          </html>
+          EOF
+          fi
+
+          # GitHub Pages landing page
+          cat > _site/index.html <<'EOF'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <meta name="color-scheme" content="light">
+            <title>Cucumber BDD Acceptance-Test Reports</title>
+
+            <style>
+              :root {
+                --background: #f6f8fa;
+                --surface: #ffffff;
+                --text: #1f2328;
+                --muted: #59636e;
+                --border: #d0d7de;
+
+                --cucumber: #138a36;
+                --cucumber-dark: #0d6929;
+                --cucumber-bg: #f0fff4;
+                --cucumber-border: #b7dfc2;
+
+                --pretty: #0969da;
+                --pretty-dark: #0550ae;
+                --pretty-bg: #f0f7ff;
+                --pretty-border: #b6d7ff;
+              }
+
+              * {
+                box-sizing: border-box;
+              }
+
+              html {
+                min-height: 100%;
+              }
+
+              body {
+                margin: 0;
+                min-height: 100vh;
+                font-family:
+                  -apple-system,
+                  BlinkMacSystemFont,
+                  "Segoe UI",
+                  Helvetica,
+                  Arial,
+                  sans-serif,
+                  "Apple Color Emoji",
+                  "Segoe UI Emoji";
+                color: var(--text);
+                background:
+                  linear-gradient(
+                    180deg,
+                    #ffffff 0,
+                    var(--background) 100%
+                  );
+              }
+
+              .page {
+                width: min(1040px, calc(100% - 3rem));
+                margin: 0 auto;
+                padding: 5rem 0 3rem;
+              }
+
+              .hero {
+                background: var(--surface);
+                border: 1px solid var(--border);
+                border-radius: 14px;
+                padding: 3rem;
+                box-shadow:
+                  0 1px 2px rgba(31, 35, 40, 0.04),
+                  0 8px 30px rgba(31, 35, 40, 0.06);
+              }
+
+              h1 {
+                margin: 0;
+                font-size: clamp(2rem, 5vw, 3rem);
+                line-height: 1.1;
+                letter-spacing: -0.035em;
+              }
+
+              .intro {
+                margin: 1rem 0 0;
+                color: var(--muted);
+                font-size: 1.1rem;
+                line-height: 1.65;
+              }
+
+              .reports {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 1.5rem;
+                margin-top: 2.5rem;
+              }
+
+              .report-card {
+                position: relative;
+                display: flex;
+                align-items: flex-start;
+                gap: 1.25rem;
+                min-height: 180px;
+                padding: 1.75rem;
+                border: 1px solid;
+                border-radius: 12px;
+                color: inherit;
+                text-decoration: none;
+                transition:
+                  transform 140ms ease,
+                  box-shadow 140ms ease,
+                  border-color 140ms ease;
+              }
+
+              .report-card:hover {
+                transform: translateY(-3px);
+                box-shadow: 0 10px 30px rgba(31, 35, 40, 0.12);
+              }
+
+              .report-card:focus-visible {
+                outline: 3px solid #0969da;
+                outline-offset: 3px;
+              }
+
+              .report-card.cucumber {
+                background: var(--cucumber-bg);
+                border-color: var(--cucumber-border);
+              }
+
+              .report-card.pretty {
+                background: var(--pretty-bg);
+                border-color: var(--pretty-border);
+              }
+
+              .icon {
+                flex: 0 0 auto;
+                display: grid;
+                place-items: center;
+                width: 58px;
+                height: 58px;
+                border: 3px solid currentColor;
+                border-radius: 10px;
+                font-size: 1.8rem;
+                font-weight: 800;
+              }
+
+              .cucumber .icon,
+              .cucumber h2,
+              .cucumber .arrow {
+                color: var(--cucumber);
+              }
+
+              .pretty .icon,
+              .pretty h2,
+              .pretty .arrow {
+                color: var(--pretty);
+              }
+
+              .content {
+                min-width: 0;
+              }
+
+              h2 {
+                margin: 0;
+                font-size: 1.3rem;
+                line-height: 1.3;
+              }
+
+              .description {
+                margin: 0.65rem 0 0;
+                color: #30363d;
+                line-height: 1.6;
+              }
+
+              .path {
+                margin-top: 1rem;
+                color: var(--muted);
+                font-family:
+                  ui-monospace,
+                  SFMono-Regular,
+                  Menlo,
+                  Consolas,
+                  monospace;
+                font-size: 0.85rem;
+              }
+
+              .arrow {
+                position: absolute;
+                top: 50%;
+                right: 1.5rem;
+                transform: translateY(-50%);
+                font-size: 1.8rem;
+                font-weight: 600;
+              }
+
+              .footer {
+                margin-top: 2rem;
+                text-align: center;
+                color: var(--muted);
+                font-size: 0.9rem;
+              }
+
+              .footer code {
+                padding: 0.15rem 0.35rem;
+                border: 1px solid var(--border);
+                border-radius: 5px;
+                background: #ffffff;
+                color: var(--text);
+              }
+
+              @media (max-width: 760px) {
+                .page {
+                  width: min(100% - 2rem, 1040px);
+                  padding-top: 2rem;
+                }
+
+                .hero {
+                  padding: 2rem 1.5rem;
+                }
+
+                .reports {
+                  grid-template-columns: 1fr;
+                }
+
+                .report-card {
+                  min-height: 0;
+                  padding-right: 3.5rem;
+                }
+              }
+
+              @media (max-width: 480px) {
+                .report-card {
+                  gap: 1rem;
+                }
+
+                .icon {
+                  width: 48px;
+                  height: 48px;
+                  font-size: 1.4rem;
+                }
+              }
+            </style>
+          </head>
+
+          <body>
+            <main class="page">
+              <section class="hero">
+                <h1>Cucumber BDD Acceptance-Test Reports</h1>
+
+                <p class="intro">
+                  Cucumber test results for SOFTENG754 E-commerce web app, 
+                  generated in HTML and PrettyReports format using Actions.
+                </p>
+
+                <div class="reports">
+
+                  <a class="report-card cucumber" href="./cucumber/">
+                    <div class="icon" aria-hidden="true">≡</div>
+
+                    <div class="content">
+                      <h2>Cucumber HTML Report</h2>
+
+                      <p class="description">
+                        Official Cucumber formatter showing features,
+                        scenarios and Gherkin steps.
+                      </p>
+
+                      <div class="path">/cucumber/</div>
+                    </div>
+
+                    <span class="arrow" aria-hidden="true">›</span>
+                  </a>
+
+                  <a class="report-card pretty" href="./pretty/">
+                    <div class="icon" aria-hidden="true">▥</div>
+
+                    <div class="content">
+                      <h2>PrettyReports Dashboard</h2>
+
+                      <p class="description">
+                        Dashboard-style report with test statistics,
+                        feature summaries and detailed results.
+                      </p>
+
+                      <div class="path">/pretty/</div>
+                    </div>
+
+                    <span class="arrow" aria-hidden="true">›</span>
+                  </a>
+
+                </div>
+
+                <div class="footer">
+                  Generated from <code>GitHub Actions</code> using GitHub Pages.
+                </div>
+              </section>
+            </main>
+          </body>
+          </html>
+          EOF
+
+      - name: Config
+        if: always()
+        uses: actions/configure-pages@v6
+
+      - name: Upload
+        if: always()
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: always() && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Run
+        id: deployment
+        uses: actions/deploy-pages@v5
+
+  status:
+    needs:
+      - build
+      - deploy
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Status
+        shell: bash
+        env:
+          TEST_EXIT: ${{ needs.build.outputs.test_exit }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          DEPLOY_RESULT: ${{ needs.deploy.result }}
+        run: |
+          if [ "$BUILD_RESULT" != "success" ]; then
+            echo "Build failed"
+            exit 1
+          fi
+
+          if [ "$DEPLOY_RESULT" != "success" ]; then
+            echo "Deployment failed"
+            exit 1
+          fi
+
+          if [ "$TEST_EXIT" != "0" ]; then
+            echo "Tests failed"
+            exit "$TEST_EXIT"
+          fi
+
+          echo "Pass"
