@@ -56,8 +56,10 @@ jobs:
           EOF
           fi
 
-          if [ -d "project/target/cucumber-report" ]; then
-            cp -R project/target/cucumber-report/. _site/pretty/
+          if [ -f "project/target/cucumber-report/cucumber-html-reports/overview-features.html" ]; then
+            cp -R project/target/cucumber-report/cucumber-html-reports/. _site/pretty/
+
+            cp _site/pretty/overview-features.html _site/pretty/index.html
           else
             cat > _site/pretty/index.html <<'EOF'
           <!doctype html>
@@ -75,7 +77,6 @@ jobs:
           EOF
           fi
 
-          # GitHub Pages landing page
           cat > _site/index.html <<'EOF'
           <!doctype html>
           <html lang="en">
@@ -324,7 +325,7 @@ jobs:
 
                 <p class="intro">
                   Cucumber test results for SOFTENG754 E-commerce web app, 
-                  generated in HTML and PrettyReports format using Actions.
+                  generated in HTML and PrettyReports format.
                 </p>
 
                 <div class="reports">
@@ -366,7 +367,7 @@ jobs:
                 </div>
 
                 <div class="footer">
-                  Generated from <code>GitHub Actions</code> using GitHub Pages.
+                  Generated from <code>GitHub Actions</code> using <code>GitHub Pages</code>.
                 </div>
               </section>
             </main>
